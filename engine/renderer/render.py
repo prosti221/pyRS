@@ -1,27 +1,23 @@
 import numpy as np
 import time
 import pygame as pg
-from dataclasses import dataclass
 
-WIDTH = 1920 
-HEIGHT = 1280
+
+WIDTH = 900 
+HEIGHT = 600
 
 near = 0.1
-far = 10.0
+far = 1000.0
 fov = 90.0
 aspect = float(HEIGHT / WIDTH)
 e = 1.0/np.tan(fov/2)
 
-top = near * np.tan(fov / 2)
-bottom = -top
-right = aspect * top
-left = -right
 
 #Projection matrix
-matProj = np.array([[e/aspect, 0, 0, 0],
+matProj = np.array([[aspect * e, 0, 0, 0],
                     [0, e, 0 ,0], 
-                    [0, 0, (far + near)/(near - far), (2*far*near)/(near-far)],
-                    [0, 0, -1, 0]])
+                    [0, 0, far/(far - near), 1.0],
+                    [0, 0, (-far * near)/(far -near), 0]])
 
 class Vertex:
     def __init__(self, x, y, z):
@@ -33,13 +29,17 @@ class Vertex:
                                 z,
                                 1])
 
-@dataclass
 class Polygon:
-    vertecies: list[Vertex] #1x3 
+    def __init__(self, vertecies):
+        self.vertecies = vertecies #1x3 
 
-@dataclass
 class Mesh:
-    m: list[Polygon]
+    def __init__(self, m):
+        self.m = m
+
+class Object:
+    def __init__(self, mesh,):
+        pass
 
 def init():
     pg.init()
@@ -81,62 +81,64 @@ def create_cube():
                 ]
     return Mesh(polygons)
 
-def project(polygon):
-    cpy = polygon
-    for vertex in cpy.vertecies:
-        vertex.coord = np.dot(vertex.coord, matProj)
-        w = vertex.coord[-1]
-        if w != 0.0:
-            vertex.x = -vertex.coord[0] / w
-            vertex.y = -vertex.coord[1] / w
-            vertex.z = vertex.coord[2] / w
-    return cpy
-
-def transform(mesh):
-    mesh_proj = []
+def proj_mesh(mesh):
+    #Check normals of polygons to decide which to project and draw
     for poly in mesh.m:
-        poly_proj = project(poly)
-        mesh_proj.append(poly_proj)
-    return Mesh(mesh_proj)
+        for vertex in poly.vertecies:
+            vertex.coord = np.dot(vertex.coord, matProj)
+            w = vertex.coord[-1]
+            if w != 0.0:
+                vertex.x = vertex.coord[0] / w
+                vertex.y = vertex.coord[1] / w
+                vertex.z = vertex.coord[2] / w
+            vertex.coord /= w
+
 
 def translate(mesh, x, y, z):
-    mesh_trans = []
     for poly in mesh.m:
-        cpy = poly
-        for vertex in cpy.vertecies:
+        for vertex in poly.vertecies:
             vertex.coord[0] += x; vertex.x += x;
             vertex.coord[1] += y; vertex.y += y;
             vertex.coord[2] += z; vertex.z += z;
-        mesh_trans.append(cpy)
-    return Mesh(mesh_trans)
 
-def rotateXZ(mesh, theta):
-    Rx = np.array([[1, 0, 0], 
-                    [0, np.cos(np.pi * np.deg2rad(theta)), -np.sin(np.pi * np.deg2rad(theta))], 
-                    [0, np.sin(np.pi* np.deg2rad(theta)), np.cos(np.pi * np.deg2rad(theta))]])
+
+
+def rotate(mesh, theta_x, theta_y, theta_z):
+    Rx = np.array([[1, 0, 0, 0], 
+                    [0, np.cos(np.deg2rad(theta_x)), -np.sin(np.deg2rad(theta_x)), 0], 
+                    [0, np.sin(np.deg2rad(theta_x)), np.cos(np.deg2rad(theta_x)), 0],
+                    [0, 0, 0, 1]])
     
-    Rz = np.array(  [[np.cos(1.2*np.pi * np.deg2rad(theta)), -np.sin(1.2*np.pi * np.deg2rad(theta)), 0], 
-                    [np.sin(1.2*np.pi * np.deg2rad(theta)), np.cos(1.2*np.pi * np.deg2rad(theta)), 0], 
-                    [0, 0, 1]])
-    R = np.matmul(Rx, Rz)
-    mesh_rot = []
+    Ry = np.array([[np.cos(np.deg2rad(theta_y)), 0, np.sin(np.deg2rad(theta_y)), 0], 
+                    [0, 1, 0, 0], 
+                    [-np.sin(np.deg2rad(theta_y)), 0, np.cos(np.deg2rad(theta_y)), 0],
+                    [0, 0, 0, 1]])
+
+
+    Rz = np.array(  [[np.cos(np.deg2rad(theta_z)), -np.sin(np.deg2rad(theta_z)), 0, 0], 
+                    [np.sin(np.deg2rad(theta_z)), np.cos(np.deg2rad(theta_z)), 0, 0], 
+                    [0, 0, 1, theta_z/10],
+                    [0, 0, 0, 1]])
+
+    R = np.matmul(Rz, Ry)
+    R = np.matmul(R, Rx)
+    #R = Rx
+
     for poly in mesh.m:
-        cpy = poly
-        for vertex in cpy.vertecies:
-            (vertex.x, vertex.y, vertex.z) = np.dot(np.array([vertex.x,vertex.y,vertex.z]), R)
-        mesh_rot.append(cpy)
-    return Mesh(mesh_rot)
+        for vertex in poly.vertecies:
+            (vertex.x, vertex.y, vertex.z) = np.dot(R[0:3, 0:3], np.array([vertex.x,vertex.y,vertex.z]))
+            vertex.coord = np.dot(R, vertex.coord)
 
 def scale(mesh):
     for poly in mesh.m:
-        poly.vertecies[0].coord[0] *= 0.25 * WIDTH
-        poly.vertecies[1].coord[0] *= 0.25 * WIDTH
-        poly.vertecies[2].coord[0] *= 0.25 * WIDTH
+        poly.vertecies[0].coord[0] *= 2*WIDTH
+        poly.vertecies[1].coord[0] *= 2*WIDTH
+        poly.vertecies[2].coord[0] *= 2*WIDTH
 
-        poly.vertecies[0].coord[1] *= 0.25 * HEIGHT
-        poly.vertecies[1].coord[1] *= 0.25 * HEIGHT
-        poly.vertecies[2].coord[1] *= 0.25 * HEIGHT
-    return mesh
+        poly.vertecies[0].coord[1] *= 2*HEIGHT
+        poly.vertecies[1].coord[1] *= 2*HEIGHT
+        poly.vertecies[2].coord[1] *= 2*HEIGHT
+
 
 def draw(mesh, screen, pg):
     for poly in mesh.m:
@@ -145,29 +147,34 @@ def draw(mesh, screen, pg):
         print('y: {0}, {1}, {2}\n'.format(poly.vertecies[0].y, poly.vertecies[1].y, poly.vertecies[2].y))
         print('z: {0}, {1}, {2}\n'.format(poly.vertecies[0].z, poly.vertecies[1].z, poly.vertecies[2].z))
 
-        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[0].x, poly.vertecies[0].y), (poly.vertecies[1].x, poly.vertecies[1].y), 2)
-        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[1].x, poly.vertecies[1].y), (poly.vertecies[2].x, poly.vertecies[2].y), 2)
-        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[2].x, poly.vertecies[2].y), (poly.vertecies[0].x, poly.vertecies[0].y), 2)
+        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), 2)
+        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), 2)
+        pg.draw.line(screen, (1, 1, 1), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), 2)
 
-
+def rotate_cube(theta):
+    #Create the cube mesh
+    mesh = create_cube()
+    #Do the rotations and translations
+    rotate(mesh, 0, 0, theta)
+    translate(mesh, 0, 0, 3)
+    #Scale the mesh
+    scale(mesh)
+    translate(mesh, 5000, 1500, 0)
+    proj_mesh(mesh)
+    return mesh
 
 if __name__ == '__main__':
-    mesh = create_cube()
-    mesh = translate(mesh, 1, 1, 6)
-    mesh = scale(mesh)
-    mesh = translate(mesh, 600, 600, 0) 
-    mesh = transform(mesh)
+
     screen, pg = init()
     run = True
-    c = 0.0
+    c = 0.1
     while(run):
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 run = False 
-        mesh = rotateXZ(mesh, c)
-        #mesh = translate(mesh, c, c, c)
+        mesh = rotate_cube(c)
         screen.fill((255, 255, 255))
         draw(mesh, screen, pg)
         pg.display.flip()
+        c += 0.5
         time.sleep(0.01)
- 
