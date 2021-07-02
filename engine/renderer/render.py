@@ -1,6 +1,6 @@
-import time
+import colorsys
 import random
-import copy
+import time
 import numpy as np
 import pygame as pg
 
@@ -9,9 +9,9 @@ WIDTH = 900
 HEIGHT = 800
 
 #Colors
-BLACK = (1, 1, 1)
+BLACK = (50, 50, 50)
 WHITE = (255, 255, 255)
-GREEN = (1, 255, 30)
+GREEN = (1, 180, 30)
 
 #Perspective projection parameters
 near = 0.1
@@ -59,8 +59,16 @@ class Polygon:
 
     def shader(self, color, light):
         normal = self.getNormal()
-        dp = np.dot(normal, light)
-        return tuple([abs(value * dp) for value in color])
+        dp = np.dot(normal, self.vertecies[0].coord[:3]/np.linalg.norm(self.vertecies[0].coord[:3]) - light)
+        HSV = colorsys.rgb_to_hsv(*color)
+        HSV = (HSV[0], HSV[1], HSV[2] - dp*10)
+        color_sh = colorsys.hsv_to_rgb(*HSV)
+        return color_sh
+
+    def toString(self):
+        print('Polygon: \n')
+        for v in self.vertecies:
+            print(v.coord)
 
 #Meshes will store a collection of polygons
 class Mesh:
@@ -74,8 +82,26 @@ class Object:
         #True 3D representation of the object
         self.mesh = None 
     
-    def load_mesh(self, mesh):
-        self.mesh = mesh
+    def load_mesh(self):
+        vertecies = []
+        polygons = []
+        with open(self.file) as file:
+            for line in file:
+                elements = line.split(' ')
+                if "v" in elements:
+                    elements = [float(e) for e in elements if e != "v"]
+                    vertecies.append(Vertex(*elements))
+                elif "f" in elements:
+                    elements = [int(e.split('/')[0]) for e in elements if e != "f" and e != '\n']
+                    index = (elements[0], elements[1], elements[2])
+                    params = [vertecies[index[0] - 1], vertecies[index[1] - 1], vertecies[index[2] - 1]]
+                    polygons.append(Polygon(params))
+        self.mesh = Mesh(polygons)
+
+    def print(self):
+        for polygon in self.mesh.m:
+            polygon.toString() 
+
 
 class Camera:
     def __init__(self, x=0, y=0, z=0):
@@ -88,7 +114,7 @@ class Light:
 def init():
     pg.init()
     screen = pg.display.set_mode((WIDTH, HEIGHT))
-    screen.fill(BLACK)
+    screen.fill(WHITE)
     pg.display.flip()    
     return (screen, pg)
 
@@ -139,16 +165,23 @@ def transform(mesh, theta_x=0, theta_y=0, theta_z=0, d_x=0, d_y=0, d_z=0):
     #R = R_z R_y R_x
     R = np.matmul(Rz, Ry)
     R = np.matmul(R, Rx)
+
+    transformed_mesh = []
     #Transform all the vertecies
     for poly in mesh.m:
+        transformed_verts = []
         for vertex in poly.vertecies:
-            vertex.coord = np.dot(R, vertex.coord)
+            new_vert = np.dot(R, vertex.coord)
+            transformed_verts.append(Vertex(new_vert[0], new_vert[1], new_vert[2]))
+        transformed_mesh.append(Polygon(transformed_verts))
+
+    return Mesh(transformed_mesh)
 
 def scale(mesh):
     for poly in mesh.m:
-        poly.vertecies[0].coord[1] *= WIDTH
-        poly.vertecies[1].coord[1] *= WIDTH
-        poly.vertecies[2].coord[1] *= WIDTH
+        poly.vertecies[0].coord[1] *= WIDTH 
+        poly.vertecies[1].coord[1] *= WIDTH 
+        poly.vertecies[2].coord[1] *= WIDTH 
 
         poly.vertecies[0].coord[0] *= HEIGHT
         poly.vertecies[1].coord[0] *= HEIGHT
@@ -158,7 +191,7 @@ def draw(mesh, screen, pg):
     for poly in mesh.m:
         #Project from 3D space to 2D space
         if poly.isVisible(camera.pos):
-            shader = poly.shader(GREEN, light.direction)
+            #shader = poly.shader(BLACK, light.direction)
             for vertex in poly.vertecies:
                 vertex.coord = np.dot(vertex.coord, matProj)
                 w = vertex.coord[-1]
@@ -166,16 +199,15 @@ def draw(mesh, screen, pg):
                     vertex.coord /= w
             
             #Draw the polygon
-            pg.draw.line(screen, WHITE, (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), 2)
-            pg.draw.line(screen, WHITE, (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), 2)
-            pg.draw.line(screen, WHITE, (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), 2)
-            pg.draw.polygon(surface=screen, color=shader, points=[(poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1])])
+            pg.draw.line(screen,BLACK, (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]))
+            pg.draw.line(screen,BLACK, (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]))
+            pg.draw.line(screen,BLACK, (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]))
+            
+            #pg.draw.polygon(surface=screen, color=shader, points=[(poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1])])
 
 def rotate_cube(cube, theta):
     #Do the rotations and translations
-    mesh_transformed = copy.deepcopy(cube)
-    transform(mesh_transformed, d_z=0, theta_y=theta*0.2, theta_z=theta*0.6)
-    transform(mesh_transformed, d_x=3, d_y=1, d_z=4)
+    mesh_transformed = transform(cube, d_x = 3, d_y = 5, d_z = 5, theta_x=theta, theta_y=-20, theta_z=0)
     #Scale the mesh
     scale(mesh_transformed)
     draw(mesh_transformed, screen, pg)
@@ -184,21 +216,23 @@ if __name__ == '__main__':
     #initializing the screen
     screen, pg = init()
 
-    #creating a cube for testing
-    cube_object = Object("None")
-    cube_object.load_mesh(create_cube())
-    
+    #creating a Mesh object for testing
+    test_object = Object("../objects/rifle.obj")
+    test_object.load_mesh()
     #setting a temporary camera and lighting direction
     camera = Camera(0, 0, 0)
-    light = Light(0.23, 0.45, 0.9)
+    light = Light(0, 0, -1)
     
     c = 0.1
     run = True
     while(run):
-        screen.fill(BLACK)
+        screen.fill(WHITE)
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 run = False
-        rotate_cube(cube_object.mesh, c)
+         #   if event.type == pg.KEYDOWN:
+         #       if event.key == pg.K_SPACE:
+         #           light.direction = np.array([random.uniform(-1, 1), random.uniform(-1, 1), random.uniform(-1, 1) ])
+        rotate_cube(test_object.mesh, c)
         pg.display.flip()
-        c += 0.1
+        c += 3 
