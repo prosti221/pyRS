@@ -3,7 +3,6 @@ from sympy.physics.vector import *
 from velocity_kinematics import *
 from dynamics import *
 from link import Link
-from latex import print_simple, print_latex
 
 if __name__ == "__main__":
     """

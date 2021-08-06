@@ -1,6 +1,5 @@
 from sympy import *
 from link import Link
-from latex import print_simple, print_latex
 
 def compute_angVel(links):                                                      
     #Jw_1

@@ -1,6 +1,6 @@
 from time import sleep
 from pipeline import Pipeline, Message
-from draw import Draw
+from render import Render
 
 class Console:
     def __init__(self, pipeline):
@@ -14,10 +14,10 @@ class Console:
 if __name__ == "__main__":
     bus = Pipeline()
     cmd = Console(bus)
-    draw = Draw()
+    renderer = Render()
 
     while True:
-        draw.sendRequest(bus)
+        renderer.sendRequest(bus)
         cmd.listen()
         sleep(1)
 
