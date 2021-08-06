@@ -1,5 +1,6 @@
 import colorsys
 import random
+import multiprocessing
 from module import Module
 import time
 import numpy as np
@@ -169,8 +170,7 @@ class Render(Module):
                 for vertex in poly.vertecies:
                     vertex.coord = np.dot(vertex.coord, matProj)
                     w = vertex.coord[-1]
-                    if w != 0.0:
-                        vertex.coord /= w
+                    vertex.coord = np.divide(vertex.coord, w)
                 #Draw the polygon
                 if wire_frame:
                     pg.draw.line(screen,BLACK, (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]))
@@ -185,15 +185,14 @@ class Render(Module):
         mesh_transformed = self.transform(cube, d_x = 6, d_y = 5, d_z = 5, theta_x=theta* 0.2, theta_y=-20, theta_z=0)
         #Scale the mesh
         self.scale(mesh_transformed, WIDTH, HEIGHT)
-        self.draw(mesh_transformed, screen, pg, wire_frame=True)
+        self.draw(mesh_transformed, screen, pg, wire_frame=False)
         eTime = time.time()
-        print(eTime - sTime)
+        print("FPS: %d" %(1/(eTime - sTime)))
 
 if __name__ == '__main__': # Testing the rendering
     renderer = Render()
     #initializing the screen
     screen, pg = renderer.init()
-
     #creating a Mesh object for testing
     test_object = Object("objects/rifle.obj")
     test_object.load_mesh()
