@@ -102,7 +102,6 @@ class Object:
         for polygon in self.mesh.m:
             polygon.toString() 
 
-
 class Camera:
     def __init__(self, x=0, y=0, z=0):
         self.pos = np.array([x, y, z], dtype=np.float64)
@@ -142,13 +141,7 @@ class Render(Module):
                         [np.sin(np.deg2rad(theta_z)), np.cos(np.deg2rad(theta_z)), 0, 0], 
                         [0, 0, 1, d_z],
                         [0, 0, 0, 1]], dtype=np.float64)
-        ''' 
-        Rxyz = np.array([[np.cos(np.deg2rad(theta_y))*np.cos(np.deg2rad(theta_z)), -np.sin(np.deg2rad(theta_z)) * np.cos(np.deg2rad(theta_y)), np.sin(np.deg2rad(theta_y)), d_x + d_z*np.sin(np.deg2rad(theta_y))], 
-                        [np.sin(np.deg2rad(theta_x))*np.sin(np.deg2rad(theta_y))*np.cos(np.deg2rad(theta_z)) + np.sin(np.deg2rad(theta_z))*np.cos(np.deg2rad(theta_x)), np.cos(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_z)) - np.sin(np.deg2rad(theta_x))*np.sin(np.deg2rad(theta_y))*np.sin(np.deg2rad(theta_z)), -np.sin(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_y)), d_y*np.cos(np.deg2rad(theta_x)) - d_z*np.sin(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_y))], 
-                        [np.sin(np.deg2rad(theta_x))*np.sin(np.deg2rad(theta_z)) - np.sin(np.deg2rad(theta_y))*np.cos(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_z)), np.sin(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_z)) + np.sin(np.deg2rad(theta_y))*np.sin(np.deg2rad(theta_z))*np.cos(np.deg2rad(theta_x)), np.cos(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_y)), d_y*np.sin(np.deg2rad(theta_x)) + d_z*np.cos(np.deg2rad(theta_x))*np.cos(np.deg2rad(theta_y))], 
-                        [0, 0, 0, 1]])
-        '''
-        #R = R_z R_y R_x
+        
         R = np.matmul(Rz, Ry)
         R = np.matmul(R, Rx)
 
@@ -162,27 +155,19 @@ class Render(Module):
             transformed_mesh.append(Polygon(transformed_verts))
         return Mesh(transformed_mesh)
 
-    def scale(self, mesh):
+    def scale(self, mesh, x, y):
         for poly in mesh.m:
-            poly.vertecies[0].coord[1] *= WIDTH 
-            poly.vertecies[1].coord[1] *= WIDTH 
-            poly.vertecies[2].coord[1] *= WIDTH 
-
-            poly.vertecies[0].coord[0] *= HEIGHT
-            poly.vertecies[1].coord[0] *= HEIGHT
-            poly.vertecies[2].coord[0] *= HEIGHT
+            for vert in poly.vertecies:
+                vert.coord[1] *= x
+                vert.coord[0] *= y
 
     def draw(self, mesh, screen, pg, wire_frame=False):
-        times = []
         for poly in mesh.m:
             #Project from 3D space to 2D space
             if poly.isVisible(camera.pos):
                 #shader = poly.shader(BLACK, light.direction)
                 for vertex in poly.vertecies:
-                    sTime = time.time()
                     vertex.coord = np.dot(vertex.coord, matProj)
-                    eTime = time.time()
-                    times.append(eTime - sTime)
                     w = vertex.coord[-1]
                     if w != 0.0:
                         vertex.coord /= w
@@ -193,14 +178,16 @@ class Render(Module):
                     pg.draw.line(screen,BLACK, (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1]), (poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]))
                 else: 
                     pg.draw.polygon(surface=screen, color=GREEN, points=[(poly.vertecies[0].coord[0], poly.vertecies[0].coord[1]), (poly.vertecies[1].coord[0], poly.vertecies[1].coord[1]), (poly.vertecies[2].coord[0], poly.vertecies[2].coord[1])])
-        print(sum(times)/len(times))
 
     def rotate_cube(self, cube, theta):
+        sTime = time.time()
         #Do the rotations and translations
         mesh_transformed = self.transform(cube, d_x = 6, d_y = 5, d_z = 5, theta_x=theta* 0.2, theta_y=-20, theta_z=0)
         #Scale the mesh
-        self.scale(mesh_transformed)
+        self.scale(mesh_transformed, WIDTH, HEIGHT)
         self.draw(mesh_transformed, screen, pg, wire_frame=True)
+        eTime = time.time()
+        print(eTime - sTime)
 
 if __name__ == '__main__': # Testing the rendering
     renderer = Render()
